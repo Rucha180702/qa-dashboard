@@ -43,6 +43,7 @@ const DEFAULT_FILTERS: Filters = {
   language: '',
   useCase: '',
   search: '',
+  goodToShare: false,
 };
 
 export const useQAStore = create<QAStore>((set, get) => ({

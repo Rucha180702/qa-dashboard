@@ -123,6 +123,26 @@ async def unflag_call(
     return {"status": "unreviewed"}
 
 
+@router.put("/{call_id}/good-to-share")
+async def toggle_good_to_share(
+    call_id: str,
+    schema: str = Query(...),
+    value: bool = Query(...),
+    db: aiosqlite.Connection = Depends(get_db),
+):
+    now = datetime.utcnow().isoformat()
+    await db.execute(
+        """INSERT INTO qa_reviews (call_id, schema, good_to_share, updated_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(call_id, schema) DO UPDATE SET
+             good_to_share=excluded.good_to_share,
+             updated_at=excluded.updated_at""",
+        (call_id, schema, int(value), now),
+    )
+    await db.commit()
+    return {"good_to_share": value}
+
+
 @router.post("/{call_id}/comments", response_model=CommentOut)
 async def add_comment(
     call_id: str,

@@ -75,7 +75,8 @@ async def _get_or_cache_calls(
         """SELECT m.call_id, m.schema, m.call_date, m.customer_phone,
                   m.audio_key, m.file_size,
                   COALESCE(r.qa_status, 'unreviewed') as qa_status,
-                  r.overall_score
+                  r.overall_score,
+                  COALESCE(r.good_to_share, 0) as good_to_share
            FROM call_metadata_cache m
            LEFT JOIN qa_reviews r ON r.call_id = m.call_id AND r.schema = m.schema
            WHERE m.schema = ? AND m.call_date = ?
@@ -97,6 +98,7 @@ async def _get_or_cache_calls(
             "audio_key": row["audio_key"] or "",
             "qa_status": row["qa_status"],
             "overall_score": row["overall_score"],
+            "good_to_share": bool(row["good_to_share"]),
             # TODO: replace with DB lookup (ClickHouse)
             "language": _dummy_field(uuid, _DUMMY_LANGUAGES, "lang"),
             "use_case": _dummy_field(uuid, _DUMMY_USE_CASES, "uc"),
@@ -113,6 +115,7 @@ async def list_calls(
     language: Optional[str] = Query(None),
     use_case: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    good_to_share: Optional[bool] = Query(None),
     db: aiosqlite.Connection = Depends(get_db),
 ):
     if (date_to - date_from).days > 30:
@@ -134,6 +137,8 @@ async def list_calls(
             c for c in all_calls
             if q in c["customer_phone"].lower() or q in c["call_id"].lower()
         ]
+    if good_to_share is not None:
+        all_calls = [c for c in all_calls if c["good_to_share"] == good_to_share]
 
     return [CallSummary(**c) for c in all_calls]
 

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchReview, upsertReview, flagCall, unflagCall,
-  addComment, deleteComment,
+  addComment, deleteComment, toggleGoodToShare,
 } from '../api/reviews';
 import type { RubricDimension } from '../types';
 
@@ -31,6 +31,17 @@ export function useFlagCall(callId: string, schema: string) {
   return useMutation({
     mutationFn: (flagged: boolean) =>
       flagged ? flagCall(callId, schema) : unflagCall(callId, schema),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['review', callId, schema] });
+      qc.invalidateQueries({ queryKey: ['calls'] });
+    },
+  });
+}
+
+export function useToggleGoodToShare(callId: string, schema: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (value: boolean) => toggleGoodToShare(callId, schema, value),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['review', callId, schema] });
       qc.invalidateQueries({ queryKey: ['calls'] });

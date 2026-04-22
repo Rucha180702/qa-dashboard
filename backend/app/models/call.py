@@ -15,6 +15,7 @@ class CallSummary(BaseModel):
     use_case: str = "Unknown"        # placeholder until DB integration
     qa_status: str = "unreviewed"
     overall_score: Optional[int] = None
+    good_to_share: bool = False
 
 
 class CallDetail(CallSummary):

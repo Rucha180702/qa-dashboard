@@ -45,6 +45,7 @@ class ReviewOut(BaseModel):
     reviewed_by: Optional[str]
     reviewed_at: Optional[str]
     qa_status: str
+    good_to_share: bool = False
     comments: list[CommentOut] = []
 
     @classmethod
@@ -66,6 +67,7 @@ class ReviewOut(BaseModel):
             reviewed_by=row["reviewed_by"],
             reviewed_at=row["reviewed_at"],
             qa_status=row["qa_status"],
+            good_to_share=bool(row["good_to_share"]) if "good_to_share" in row.keys() else False,
             comments=comments,
         )
 

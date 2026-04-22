@@ -18,6 +18,7 @@ export interface CallSummary {
   use_case: string;
   qa_status: QAStatus;
   overall_score: number | null;
+  good_to_share: boolean;
 }
 
 export interface RubricDimension {
@@ -44,6 +45,7 @@ export interface Review {
   reviewed_by: string | null;
   reviewed_at: string | null;
   qa_status: QAStatus;
+  good_to_share: boolean;
   comments: Comment[];
 }
 
@@ -85,6 +87,7 @@ export interface Filters {
   language: string;
   useCase: string;
   search: string;
+  goodToShare: boolean;
 }
 
 export interface SilenceRegion {

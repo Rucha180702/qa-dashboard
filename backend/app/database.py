@@ -86,6 +86,15 @@ async def create_tables():
             if stmt:
                 await db.execute(stmt)
         await db.commit()
+        # Safe migrations for existing databases
+        for col_sql in [
+            "ALTER TABLE qa_reviews ADD COLUMN good_to_share INTEGER DEFAULT 0",
+        ]:
+            try:
+                await db.execute(col_sql)
+                await db.commit()
+            except Exception:
+                pass  # column already exists
         await _seed_users(db)
 
 

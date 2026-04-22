@@ -1,4 +1,4 @@
-import { Search, SlidersHorizontal, X } from 'lucide-react';
+import { Search, SlidersHorizontal, X, Sparkles } from 'lucide-react';
 import { useQAStore } from '../../store/useQAStore';
 import type { QAStatus } from '../../types';
 
@@ -20,7 +20,7 @@ export function CallFilters() {
 
   const hasActive =
     filters.qaStatus !== '' || filters.language !== '' ||
-    filters.useCase !== ''  || filters.search !== '';
+    filters.useCase !== ''  || filters.search !== '' || filters.goodToShare;
 
   return (
     <div className="p-3 space-y-2.5 border-b border-slate-700/60">

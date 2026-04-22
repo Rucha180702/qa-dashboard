@@ -21,6 +21,7 @@ export async function fetchCalls(
   if (filters.language) params.language  = filters.language;
   if (filters.useCase)  params.use_case  = filters.useCase;
   if (filters.search)   params.search    = filters.search;
+  if (filters.goodToShare) params.good_to_share = 'true';
   const res = await apiClient.get<CallSummary[]>('/api/calls', { params });
   return res.data;
 }

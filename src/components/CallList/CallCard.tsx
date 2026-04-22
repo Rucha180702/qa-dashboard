@@ -1,4 +1,4 @@
-import { Clock, Phone, Star, Copy } from 'lucide-react';
+import { Clock, Phone, Star, Copy, Flag, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import type { CallSummary } from '../../types';
 import { formatDuration, formatDate, formatPhone, STATUS_CONFIG } from './callUtils';
@@ -7,6 +7,7 @@ interface Props {
   call: CallSummary;
   isSelected: boolean;
   onClick: () => void;
+  variant?: 'flagged' | 'good';
 }
 
 const USE_CASE_COLORS: Record<string, string> = {
@@ -18,7 +19,7 @@ const USE_CASE_COLORS: Record<string, string> = {
   'EMI Inquiry':  'bg-cyan-900/40 text-cyan-300',
 };
 
-export function CallCard({ call, isSelected, onClick }: Props) {
+export function CallCard({ call, isSelected, onClick, variant }: Props) {
   const status = STATUS_CONFIG[call.qa_status];
   const ucColor = USE_CASE_COLORS[call.use_case] ?? 'bg-slate-700/50 text-slate-300';
   const [copied, setCopied] = useState(false);
@@ -30,18 +31,36 @@ export function CallCard({ call, isSelected, onClick }: Props) {
     setTimeout(() => setCopied(false), 1500);
   };
 
+  const baseClass = (() => {
+    if (isSelected) {
+      if (variant === 'flagged') return 'bg-red-900/20 border-red-500/60 ring-1 ring-red-500/30';
+      if (variant === 'good')    return 'bg-emerald-900/20 border-emerald-500/60 ring-1 ring-emerald-500/30';
+      return 'bg-blue-600/10 border-blue-500/40 ring-1 ring-blue-500/30';
+    }
+    if (variant === 'flagged') return 'bg-red-950/40 border-red-800/50 hover:bg-red-950/60 hover:border-red-700/60';
+    if (variant === 'good')    return 'bg-emerald-950/30 border-emerald-800/40 hover:bg-emerald-950/50 hover:border-emerald-700/50';
+    return 'bg-slate-800/50 border-slate-700/40 hover:bg-slate-800 hover:border-slate-600/60';
+  })();
+
   return (
     <button
       onClick={onClick}
-      className={[
-        'w-full text-left px-4 py-3 rounded-xl border transition-all duration-150',
-        isSelected
-          ? 'bg-blue-600/10 border-blue-500/40 ring-1 ring-blue-500/30'
-          : 'bg-slate-800/50 border-slate-700/40 hover:bg-slate-800 hover:border-slate-600/60',
-      ].join(' ')}
+      className={`w-full text-left px-4 py-3 rounded-xl border transition-all duration-150 ${baseClass}`}
     >
-      {/* Row 1: Status badge */}
-      <div className="flex items-center justify-end mb-2">
+      {/* Row 1: variant icon + Status badge */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1">
+          {variant === 'flagged' && (
+            <span className="flex items-center gap-1 text-[10px] font-semibold text-red-400">
+              <Flag size={10} className="fill-red-400" /> FLAGGED
+            </span>
+          )}
+          {variant === 'good' && (
+            <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
+              <Sparkles size={10} /> GOOD CALL
+            </span>
+          )}
+        </div>
         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${status.badgeClass}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${status.dotClass}`} />
           {status.label}

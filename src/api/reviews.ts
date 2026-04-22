@@ -44,6 +44,12 @@ export async function addComment(
   return res.data;
 }
 
+export async function toggleGoodToShare(callId: string, schema: string, value: boolean): Promise<void> {
+  await apiClient.put(`/api/calls/${callId}/good-to-share`, null, {
+    params: { schema, value },
+  });
+}
+
 export async function deleteComment(callId: string, schema: string, commentId: number): Promise<void> {
   await apiClient.delete(`/api/calls/${callId}/comments/${commentId}`, {
     params: { schema },

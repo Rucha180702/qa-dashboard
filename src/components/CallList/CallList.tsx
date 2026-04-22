@@ -1,4 +1,4 @@
-import { AlertCircle, Loader2, PhoneCall, Shuffle, Flag, ChevronDown, ChevronRight } from 'lucide-react';
+import { AlertCircle, Loader2, PhoneCall, Shuffle, Flag, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { useQAStore } from '../../store/useQAStore';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -19,7 +19,10 @@ export function CallList() {
   const bulkSample = useBulkSample();
 
   const flaggedCalls  = calls.filter((c) => c.qa_status === 'flagged');
-  const regularCalls  = calls.filter((c) => c.qa_status !== 'flagged');
+  const goodCalls     = calls.filter((c) => c.good_to_share);
+  const regularCalls  = calls.filter((c) => c.qa_status !== 'flagged' && !c.good_to_share);
+
+  const [goodOpen, setGoodOpen] = useState(true);
 
   const stats = {
     total:      calls.length,
@@ -111,34 +114,68 @@ export function CallList() {
           </div>
         )}
 
-        {/* Supervisor: Flagged section shown at the top with priority */}
+        {/* Supervisor: Flagged for Review — pinned at top, strongly highlighted */}
         {!isLoading && isSupervisor && flaggedCalls.length > 0 && (
-          <div className="mb-2">
+          <div className="mb-3">
             <button
               onClick={() => setFlaggedOpen((v) => !v)}
-              className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-red-900/20 border border-red-800/40 text-xs font-semibold text-red-300 hover:bg-red-900/30 transition-colors mb-1"
+              className="w-full flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-900/30 border border-red-700/60 text-xs font-bold text-red-300 hover:bg-red-900/40 transition-colors mb-1.5"
             >
               {flaggedOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-              <Flag size={11} />
+              <Flag size={11} className="fill-red-400 text-red-400" />
               Flagged for Review
-              <span className="ml-auto bg-red-800/50 text-red-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+              <span className="ml-auto bg-red-700/60 text-red-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
                 {flaggedCalls.length}
               </span>
             </button>
-            {flaggedOpen && flaggedCalls.map((call) => (
-              <div key={call.call_id} className="pl-1 border-l-2 border-red-700/40 ml-1 mb-1">
-                <CallCard
-                  call={call}
-                  isSelected={selectedCall?.call_id === call.call_id}
-                  onClick={() => setSelectedCall(call)}
-                />
+            {flaggedOpen && (
+              <div className="space-y-1.5">
+                {flaggedCalls.map((call) => (
+                  <CallCard
+                    key={call.call_id}
+                    call={call}
+                    isSelected={selectedCall?.call_id === call.call_id}
+                    onClick={() => setSelectedCall(call)}
+                    variant="flagged"
+                  />
+                ))}
               </div>
-            ))}
+            )}
+          </div>
+        )}
+
+        {/* Good to Share — visible to all users */}
+        {!isLoading && goodCalls.length > 0 && (
+          <div className="mb-3">
+            <button
+              onClick={() => setGoodOpen((v) => !v)}
+              className="w-full flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-900/20 border border-emerald-700/40 text-xs font-bold text-emerald-300 hover:bg-emerald-900/30 transition-colors mb-1.5"
+            >
+              {goodOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+              <Sparkles size={11} />
+              Good to Share
+              <span className="ml-auto bg-emerald-800/50 text-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                {goodCalls.length}
+              </span>
+            </button>
+            {goodOpen && (
+              <div className="space-y-1.5">
+                {goodCalls.map((call) => (
+                  <CallCard
+                    key={call.call_id}
+                    call={call}
+                    isSelected={selectedCall?.call_id === call.call_id}
+                    onClick={() => setSelectedCall(call)}
+                    variant="good"
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {/* Regular calls */}
-        {!isLoading && (isSupervisor ? regularCalls : calls).map((call) => (
+        {!isLoading && regularCalls.map((call) => (
           <CallCard
             key={call.call_id}
             call={call}
