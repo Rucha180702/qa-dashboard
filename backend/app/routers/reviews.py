@@ -38,7 +38,7 @@ async def _get_comments(db: aiosqlite.Connection, call_id: str, schema: str) -> 
 async def get_review(
     call_id: str,
     schema: str = Query(...),
-    _user: dict = Depends(require_internal),
+    _user: dict = Depends(get_current_user),
     db: aiosqlite.Connection = Depends(get_db),
 ):
     row = await _get_review_row(db, call_id, schema)
@@ -154,13 +154,16 @@ async def add_comment(
     call_id: str,
     payload: CommentCreate,
     schema: str = Query(...),
-    _user: dict = Depends(require_internal),
+    user: dict = Depends(get_current_user),
     db: aiosqlite.Connection = Depends(get_db),
 ):
+    # Use the current user's display_name as the author
+    author = user.get("display_name", "Unknown")
+    
     async with db.execute(
         """INSERT INTO qa_comments (call_id, schema, text, timestamp_anchor, author)
            VALUES (?,?,?,?,?)""",
-        (call_id, schema, payload.text, payload.timestamp_anchor, payload.author),
+        (call_id, schema, payload.text, payload.timestamp_anchor, author),
     ) as cur:
         comment_id = cur.lastrowid
     await db.commit()
@@ -178,16 +181,24 @@ async def delete_comment(
     call_id: str,
     comment_id: int,
     schema: str = Query(...),
-    _user: dict = Depends(require_internal),
+    user: dict = Depends(get_current_user),
     db: aiosqlite.Connection = Depends(get_db),
 ):
     async with db.execute(
-        "SELECT id FROM qa_comments WHERE id = ? AND call_id = ? AND schema = ?",
+        "SELECT id, author FROM qa_comments WHERE id = ? AND call_id = ? AND schema = ?",
         (comment_id, call_id, schema),
     ) as cur:
         row = await cur.fetchone()
     if not row:
         raise HTTPException(404, "Comment not found")
+    
+    # Internal users (qa_analyst, supervisor) can delete any comment
+    # Clients can only delete their own comments
+    is_internal = user.get("role") != "client"
+    is_author = row["author"] == user.get("display_name", "")
+    
+    if not (is_internal or is_author):
+        raise HTTPException(403, "You can only delete your own comments")
 
     await db.execute("DELETE FROM qa_comments WHERE id = ?", (comment_id,))
     await db.commit()

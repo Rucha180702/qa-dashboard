@@ -223,7 +223,7 @@ async def export_csv(
     date_to: date = Query(default_factory=date.today),
     qa_status: Optional[str] = Query(None),
     good_to_share: Optional[bool] = Query(None),
-    _user: dict = Depends(require_internal),
+    _user: dict = Depends(get_current_user),
     db: aiosqlite.Connection = Depends(get_db),
 ):
     if (date_to - date_from).days > 30:
