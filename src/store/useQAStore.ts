@@ -40,7 +40,8 @@ const DEFAULT_FILTERS: Filters = {
   dateFrom: sevenDaysAgo,
   dateTo: today,
   qaStatus: '',
-  agentId: '',
+  language: '',
+  useCase: '',
   search: '',
 };
 

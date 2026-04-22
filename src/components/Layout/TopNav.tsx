@@ -1,12 +1,16 @@
 import { useEffect } from 'react';
-import { Shield, ChevronDown, Building2, Loader2 } from 'lucide-react';
+import { Shield, ChevronDown, Building2, Loader2, LogOut, Crown } from 'lucide-react';
 import { useQAStore } from '../../store/useQAStore';
 import { useSchemas } from '../../hooks/useCalls';
+import { useAuthStore } from '../../store/useAuthStore';
 
 export function TopNav() {
   const schema    = useQAStore((s) => s.schema);
   const setSchema = useQAStore((s) => s.setSchema);
   const { data: schemas = [], isLoading } = useSchemas();
+  const user   = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const isSupervisor = user?.role === 'supervisor';
 
   // Auto-select first schema on initial load
   useEffect(() => {
@@ -60,9 +64,24 @@ export function TopNav() {
           )}
         </div>
 
-        {/* User avatar */}
-        <div className="w-7 h-7 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-[11px] font-bold text-blue-400">
-          QA
+        {/* User info + logout */}
+        <div className="flex items-center gap-2">
+          <div className={[
+            'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-medium',
+            isSupervisor
+              ? 'bg-amber-900/20 border-amber-700/40 text-amber-300'
+              : 'bg-slate-800 border-slate-700/60 text-slate-400',
+          ].join(' ')}>
+            {isSupervisor && <Crown size={11} />}
+            {user?.display_name ?? 'User'}
+          </div>
+          <button
+            onClick={logout}
+            title="Sign out"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-all"
+          >
+            <LogOut size={14} />
+          </button>
         </div>
       </div>
     </header>

@@ -3,6 +3,13 @@ import type {
   CallSummary, AudioUrlResponse, TranscriptResponse, BulkSampleResponse, Filters
 } from '../types';
 
+export async function startTranscription(
+  callId: string, schema: string
+): Promise<{ status: string; job_name?: string; message?: string }> {
+  const res = await apiClient.post(`/api/calls/${callId}/transcribe`, null, { params: { schema } });
+  return res.data;
+}
+
 export async function fetchCalls(
   schema: string,
   filters: Filters
@@ -11,7 +18,8 @@ export async function fetchCalls(
   if (filters.dateFrom) params.date_from = filters.dateFrom;
   if (filters.dateTo)   params.date_to   = filters.dateTo;
   if (filters.qaStatus) params.qa_status = filters.qaStatus;
-  if (filters.agentId)  params.agent_id  = filters.agentId;
+  if (filters.language) params.language  = filters.language;
+  if (filters.useCase)  params.use_case  = filters.useCase;
   if (filters.search)   params.search    = filters.search;
   const res = await apiClient.get<CallSummary[]>('/api/calls', { params });
   return res.data;

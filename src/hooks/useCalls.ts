@@ -1,6 +1,7 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { fetchCalls, fetchSchemas, fetchAudioUrl, fetchTranscript, fetchBulkSample } from '../api/calls';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fetchCalls, fetchSchemas, fetchAudioUrl, fetchTranscript, fetchBulkSample, startTranscription } from '../api/calls';
 import { useQAStore } from '../store/useQAStore';
+import type { TranscriptResponse } from '../types';
 
 export function useSchemas() {
   return useQuery({ queryKey: ['schemas'], queryFn: fetchSchemas, staleTime: Infinity });
@@ -28,11 +29,26 @@ export function useAudioUrl(callId: string | undefined, schema: string | undefin
 }
 
 export function useTranscript(callId: string | undefined, schema: string | undefined) {
-  return useQuery({
+  return useQuery<TranscriptResponse>({
     queryKey: ['transcript', callId, schema],
     queryFn: () => fetchTranscript(callId!, schema!),
     enabled: !!callId && !!schema,
-    staleTime: Infinity,
+    staleTime: 0,
+    refetchInterval: (query) => {
+      const s = query.state.data?.status;
+      return s === 'pending' || s === 'in_progress' ? 5000 : false;
+    },
+  });
+}
+
+export function useStartTranscription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ callId, schema }: { callId: string; schema: string }) =>
+      startTranscription(callId, schema),
+    onSuccess: (_data, { callId, schema }) => {
+      queryClient.invalidateQueries({ queryKey: ['transcript', callId, schema] });
+    },
   });
 }
 

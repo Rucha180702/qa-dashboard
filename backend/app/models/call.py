@@ -9,9 +9,10 @@ class CallSummary(BaseModel):
     schema: str
     call_date: str
     customer_phone: str
-    agent_id: str
     duration_seconds: int
     audio_key: str
+    language: str = "Unknown"        # placeholder until DB integration
+    use_case: str = "Unknown"        # placeholder until DB integration
     qa_status: str = "unreviewed"
     overall_score: Optional[int] = None
 

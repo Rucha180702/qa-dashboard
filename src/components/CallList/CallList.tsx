@@ -1,21 +1,30 @@
-import { AlertCircle, Loader2, PhoneCall, Shuffle } from 'lucide-react';
+import { AlertCircle, Loader2, PhoneCall, Shuffle, Flag, ChevronDown, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
 import { useQAStore } from '../../store/useQAStore';
+import { useAuthStore } from '../../store/useAuthStore';
 import { useCalls, useBulkSample } from '../../hooks/useCalls';
 import { CallFilters } from './CallFilters';
 import { CallCard } from './CallCard';
 
 export function CallList() {
-  const selectedCall  = useQAStore((s) => s.selectedCall);
+  const selectedCall    = useQAStore((s) => s.selectedCall);
   const setSelectedCall = useQAStore((s) => s.setSelectedCall);
-  const bulkSession   = useQAStore((s) => s.bulkSession);
+  const bulkSession     = useQAStore((s) => s.bulkSession);
+  const user            = useAuthStore((s) => s.user);
+  const isSupervisor    = user?.role === 'supervisor';
+
+  const [flaggedOpen, setFlaggedOpen] = useState(true);
 
   const { data: calls = [], isLoading, error, isFetching } = useCalls();
   const bulkSample = useBulkSample();
 
+  const flaggedCalls  = calls.filter((c) => c.qa_status === 'flagged');
+  const regularCalls  = calls.filter((c) => c.qa_status !== 'flagged');
+
   const stats = {
     total:      calls.length,
     unreviewed: calls.filter((c) => c.qa_status === 'unreviewed').length,
-    flagged:    calls.filter((c) => c.qa_status === 'flagged').length,
+    flagged:    flaggedCalls.length,
   };
 
   return (
@@ -102,7 +111,34 @@ export function CallList() {
           </div>
         )}
 
-        {!isLoading && calls.map((call) => (
+        {/* Supervisor: Flagged section shown at the top with priority */}
+        {!isLoading && isSupervisor && flaggedCalls.length > 0 && (
+          <div className="mb-2">
+            <button
+              onClick={() => setFlaggedOpen((v) => !v)}
+              className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-red-900/20 border border-red-800/40 text-xs font-semibold text-red-300 hover:bg-red-900/30 transition-colors mb-1"
+            >
+              {flaggedOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+              <Flag size={11} />
+              Flagged for Review
+              <span className="ml-auto bg-red-800/50 text-red-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {flaggedCalls.length}
+              </span>
+            </button>
+            {flaggedOpen && flaggedCalls.map((call) => (
+              <div key={call.call_id} className="pl-1 border-l-2 border-red-700/40 ml-1 mb-1">
+                <CallCard
+                  call={call}
+                  isSelected={selectedCall?.call_id === call.call_id}
+                  onClick={() => setSelectedCall(call)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Regular calls */}
+        {!isLoading && (isSupervisor ? regularCalls : calls).map((call) => (
           <CallCard
             key={call.call_id}
             call={call}

@@ -1,6 +1,6 @@
 import re
-import asyncio
-from datetime import datetime, timedelta, date
+import hashlib
+from datetime import date
 from typing import Optional
 
 import boto3
@@ -13,9 +13,12 @@ _COMPLETE_RE = re.compile(
 )
 _USER_RE = re.compile(r"user_recorded_(\w+)_\d+\.wav$")
 
-# 8 kHz, 16-bit, mono telephony WAV
 _BYTES_PER_SEC = 16_000
 _WAV_HEADER = 44
+
+# TODO: Replace with DB lookup once ClickHouse integration is live
+_DUMMY_LANGUAGES = ["Hindi", "English", "Marathi", "Tamil", "Telugu", "Bengali", "Gujarati"]
+_DUMMY_USE_CASES = ["Loan Inquiry", "Collection", "Support", "Onboarding", "Complaint", "EMI Inquiry"]
 
 
 def _get_s3_client():
@@ -33,6 +36,12 @@ def _estimate_duration(file_size: int) -> int:
     return max(0, (file_size - _WAV_HEADER) // _BYTES_PER_SEC)
 
 
+def _dummy_field(uuid: str, choices: list[str], salt: str) -> str:
+    """Deterministic dummy value derived from UUID — stable across reloads."""
+    h = int(hashlib.md5(f"{uuid}{salt}".encode()).hexdigest(), 16)
+    return choices[h % len(choices)]
+
+
 def _date_prefix(schema: str, d: date) -> str:
     return (
         f"media/{schema}/freeswitch/"
@@ -41,11 +50,9 @@ def _date_prefix(schema: str, d: date) -> str:
 
 
 def list_calls_from_s3(schema: str, target_date: date) -> list[dict]:
-    """Return list of call dicts for a given schema + date."""
     s3 = _get_s3_client()
     prefix = _date_prefix(schema, target_date)
     paginator = s3.get_paginator("list_objects_v2")
-
     calls: dict[str, dict] = {}
 
     for page in paginator.paginate(Bucket=get_settings().aws_s3_bucket_name, Prefix=prefix):
@@ -53,7 +60,6 @@ def list_calls_from_s3(schema: str, target_date: date) -> list[dict]:
             key: str = obj["Key"]
             size: int = obj["Size"]
 
-            # Match the complete call recording
             m = _COMPLETE_RE.search(key)
             if m:
                 phone, uuid = m.group(1), m.group(2)
@@ -63,29 +69,18 @@ def list_calls_from_s3(schema: str, target_date: date) -> list[dict]:
                         "schema": schema,
                         "call_date": target_date.isoformat(),
                         "customer_phone": phone,
-                        "agent_id": "",
                         "audio_key": key,
                         "file_size": size,
                         "duration_seconds": _estimate_duration(size),
+                        # Dummy until DB integration
+                        "language": _dummy_field(uuid, _DUMMY_LANGUAGES, "lang"),
+                        "use_case": _dummy_field(uuid, _DUMMY_USE_CASES, "uc"),
                     }
-                continue
-
-            # Extract agent_id from user recordings (take first occurrence)
-            um = _USER_RE.search(key)
-            if um:
-                agent_id = um.group(1)
-                # find call uuid from path segment
-                parts = key.split("/")
-                if len(parts) >= 2:
-                    folder_uuid = parts[-2]
-                    if folder_uuid in calls and not calls[folder_uuid]["agent_id"]:
-                        calls[folder_uuid]["agent_id"] = agent_id
 
     return list(calls.values())
 
 
 def discover_schemas() -> list[str]:
-    """List tenant schemas by reading media/ common prefixes from S3."""
     s3 = _get_s3_client()
     cfg = get_settings()
     response = s3.list_objects_v2(
@@ -95,7 +90,6 @@ def discover_schemas() -> list[str]:
     )
     schemas = []
     for prefix in response.get("CommonPrefixes", []):
-        # prefix looks like "media/ad_5c9238/"
         part = prefix["Prefix"].rstrip("/").split("/")[-1]
         if part:
             schemas.append(part)

@@ -8,6 +8,16 @@ export const apiClient = axios.create({
   timeout: 30_000,
 });
 
+// Attach JWT from persisted auth store on every request
+apiClient.interceptors.request.use((config) => {
+  try {
+    const raw = localStorage.getItem('qa-auth');
+    const token = raw ? JSON.parse(raw)?.state?.token : null;
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+  } catch { /* ignore parse errors */ }
+  return config;
+});
+
 apiClient.interceptors.response.use(
   (res) => res,
   (err) => {
