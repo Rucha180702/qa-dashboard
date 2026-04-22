@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type {
-  CallSummary, AudioUrlResponse, TranscriptResponse, BulkSampleResponse, Filters
+  CallSummary, AudioUrlResponse, TranscriptResponse, BulkSampleResponse, Filters, Entity,
 } from '../types';
 
 export async function startTranscription(
@@ -56,4 +56,32 @@ export async function fetchBulkSample(
   if (dateTo)   params.date_to   = dateTo;
   const res = await apiClient.get<BulkSampleResponse>('/api/calls/bulk-sample', { params });
   return res.data;
+}
+
+export async function fetchEntities(callId: string, schema: string): Promise<Entity[]> {
+  const res = await apiClient.get<Entity[]>(`/api/calls/${callId}/entities`, {
+    params: { schema },
+  });
+  return res.data;
+}
+
+export async function downloadReport(
+  schema: string,
+  dateFrom: string,
+  dateTo: string,
+  qaStatus?: string,
+): Promise<void> {
+  const params: Record<string, string> = { schema };
+  if (dateFrom) params.date_from = dateFrom;
+  if (dateTo)   params.date_to   = dateTo;
+  if (qaStatus) params.qa_status  = qaStatus;
+  const res = await apiClient.get('/api/calls/export', { params, responseType: 'blob' });
+  const url = URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `qa_report_${schema}_${dateFrom}_to_${dateTo}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }

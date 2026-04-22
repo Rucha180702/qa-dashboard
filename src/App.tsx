@@ -7,6 +7,7 @@ import { CallList } from './components/CallList/CallList';
 import { AudioPlayer } from './components/AudioPlayer/AudioPlayer';
 import { TranscriptPanel } from './components/Transcript/TranscriptPanel';
 import { RatingPanel } from './components/RatingPanel/RatingPanel';
+import { EntityPanel } from './components/Entities/EntityPanel';
 import { LoginPage } from './components/Auth/LoginPage';
 import { CallAnalysis } from './components/Analytics/CallAnalysis';
 import { AgentAnalysis } from './components/Analytics/AgentAnalysis';
@@ -14,14 +15,12 @@ import { useAuthStore } from './store/useAuthStore';
 
 type Tab = 'qa_review' | 'call_analysis' | 'agent_analysis';
 
-const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'qa_review',       label: 'QA Review',      icon: <PhoneCall size={13} /> },
-  { id: 'call_analysis',   label: 'Call Analysis',   icon: <BarChart2 size={13} /> },
-  { id: 'agent_analysis',  label: 'Agent Analysis',  icon: <Users size={13} /> },
+const INTERNAL_TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  { id: 'qa_review',      label: 'QA Review',     icon: <PhoneCall size={13} /> },
+  { id: 'call_analysis',  label: 'Call Analysis',  icon: <BarChart2 size={13} /> },
+  { id: 'agent_analysis', label: 'Agent Analysis', icon: <Users size={13} /> },
 ];
 
-// Shared WaveSurfer ref (AudioPlayer creates, transcript listens to seek events)
-// The seek event bridge: TranscriptPanel dispatches 'qa:seek', AudioPlayer listens here
 function SeekBridge({ wsRef }: { wsRef: React.MutableRefObject<WaveSurfer | null> }) {
   useEffect(() => {
     const handler = (e: Event) => {
@@ -38,26 +37,28 @@ function SeekBridge({ wsRef }: { wsRef: React.MutableRefObject<WaveSurfer | null
 }
 
 const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
+  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
 
 function Dashboard() {
   const wsRef = useRef<WaveSurfer | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('qa_review');
+  const user = useAuthStore((s) => s.user);
+  const isClient = user?.role === 'client';
+
+  // Client can access QA Review and Call Analysis, but NOT Agent Analysis
+  const availableTabs = isClient 
+    ? INTERNAL_TABS.filter(t => t.id !== 'agent_analysis')
+    : INTERNAL_TABS;
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-slate-950">
       <SeekBridge wsRef={wsRef} />
       <TopNav />
 
-      {/* Tab bar */}
+      {/* Tab bar — Agent Analysis hidden for client */}
       <div className="shrink-0 flex items-center gap-1 px-4 border-b border-slate-800 bg-slate-900/60">
-        {TABS.map((tab) => (
+        {availableTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
@@ -75,7 +76,7 @@ function Dashboard() {
       </div>
 
       {/* QA Review — 3-panel layout */}
-      {activeTab === 'qa_review' && (
+      {(activeTab === 'qa_review' || isClient) && (
         <main className="flex-1 flex overflow-hidden p-3 gap-3 min-h-0">
           <div className="w-[340px] shrink-0 flex flex-col overflow-hidden">
             <CallList />
@@ -89,13 +90,16 @@ function Dashboard() {
             </div>
           </div>
           <div className="w-80 shrink-0 overflow-hidden">
-            <RatingPanel />
+            {isClient ? <EntityPanel /> : <RatingPanel />}
           </div>
         </main>
       )}
 
-      {activeTab === 'call_analysis'  && <CallAnalysis />}
-      {activeTab === 'agent_analysis' && <AgentAnalysis />}
+      {/* Call Analysis — visible to client and internal users */}
+      {activeTab === 'call_analysis' && <CallAnalysis />}
+      
+      {/* Agent Analysis — hidden for client */}
+      {!isClient && activeTab === 'agent_analysis' && <AgentAnalysis />}
     </div>
   );
 }

@@ -8,6 +8,9 @@ from app.services.s3_service import generate_presigned_url
 
 _AAI_BASE = "https://api.assemblyai.com/v2"
 
+# Pause between words (in ms) long enough to indicate a speaker change
+_PAUSE_THRESHOLD_MS = 1500
+
 # AssemblyAI detected language codes → ISO 639-1 for MyMemory translation
 _LANG_TO_ISO: dict[str, str] = {
     "hi": "hi", "ta": "ta", "te": "te", "mr": "mr",
@@ -47,7 +50,7 @@ def submit_transcription_job(call_id: str, schema: str, audio_key: str) -> str:
         "audio_url": audio_url,
         "speaker_labels": True,
         "language_detection": True,
-        "speech_models": ["universal-2"],  # required for language detection
+        "speech_models": ["universal-2"],
     })
     if "id" not in response:
         raise RuntimeError(f"AssemblyAI submit failed: {response}")
@@ -55,7 +58,7 @@ def submit_transcription_job(call_id: str, schema: str, audio_key: str) -> str:
 
 
 def check_transcription_job(job_name: str) -> dict:
-    """Poll AssemblyAI for current job status. Returns dict with 'status'."""
+    """Poll AssemblyAI for current job status."""
     response = _aai_get(f"/transcript/{job_name}")
     aai_status = response.get("status", "queued")
 
@@ -71,6 +74,63 @@ def check_transcription_job(job_name: str) -> dict:
         result["language_code"] = response.get("language_code", "unknown")
     elif aai_status == "error":
         result["failure_reason"] = response.get("error", "Transcription failed")
+
+    return result
+
+
+def _flush(group: list[dict], speaker: str, out: list[dict]) -> None:
+    if not group:
+        return
+    text = " ".join(w.get("text", "") for w in group).strip()
+    if text:
+        out.append({
+            "speaker": speaker,
+            "text": text,
+            "start": group[0].get("start", 0),
+            "end": group[-1].get("end", 0),
+        })
+
+
+def _build_utterances_from_words(words: list[dict]) -> list[dict]:
+    """
+    Group word-level items into turn-based utterances.
+
+    If AssemblyAI detected multiple speakers, groups consecutive same-speaker
+    words together. If only one speaker was detected (common for mono phone
+    recordings), splits on pauses >= _PAUSE_THRESHOLD_MS and alternates
+    between two synthetic speakers so the UI shows a proper conversation view.
+    """
+    if not words:
+        return []
+
+    unique_speakers = {w.get("speaker", "A") for w in words if w.get("speaker")}
+    result: list[dict] = []
+    group: list[dict] = []
+
+    if len(unique_speakers) > 1:
+        # Diarization worked — group by consecutive speaker label
+        cur_sp = words[0].get("speaker", "A")
+        for word in words:
+            sp = word.get("speaker", "A")
+            if sp != cur_sp:
+                _flush(group, cur_sp, result)
+                group = []
+                cur_sp = sp
+            group.append(word)
+        _flush(group, cur_sp, result)
+    else:
+        # Single speaker detected — alternate at significant pauses
+        alt_idx = 0
+        labels = ["A", "B"]
+        for i, word in enumerate(words):
+            if i > 0:
+                gap = word.get("start", 0) - words[i - 1].get("end", 0)
+                if gap >= _PAUSE_THRESHOLD_MS and group:
+                    _flush(group, labels[alt_idx], result)
+                    group = []
+                    alt_idx = 1 - alt_idx
+            group.append(word)
+        _flush(group, labels[alt_idx], result)
 
     return result
 
@@ -104,9 +164,22 @@ def download_and_process_transcript(job_name: str) -> tuple[str, list[dict]]:
     response = _aai_get(f"/transcript/{job_name}")
     language_code: str = response.get("language_code", "unknown")
     raw_utterances: list[dict] = response.get("utterances") or []
+    words: list[dict] = response.get("words") or []
 
-    # Map AssemblyAI speaker labels (A, B, …) → agent / customer
-    # First speaker in the call = agent (they greet/initiate)
+    # If utterances is empty or only has one unique speaker, rebuild from
+    # word-level data which gives us finer-grained pause information.
+    if raw_utterances:
+        unique_speakers = {u.get("speaker", "A") for u in raw_utterances}
+    else:
+        unique_speakers = set()
+
+    if not raw_utterances or len(unique_speakers) <= 1:
+        rebuilt = _build_utterances_from_words(words)
+        if rebuilt:
+            raw_utterances = rebuilt
+
+    # Map speaker labels (A, B, …) → "agent" / "customer"
+    # First speaker encountered = agent (they greet/initiate the call)
     speaker_map: dict[str, str] = {}
     for utt in raw_utterances:
         sp = utt.get("speaker", "A")

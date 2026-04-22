@@ -1,8 +1,9 @@
-import { AlertCircle, Loader2, PhoneCall, Shuffle, Flag, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
+import { AlertCircle, Loader2, PhoneCall, Shuffle, Flag, ChevronDown, ChevronRight, Sparkles, Download } from 'lucide-react';
 import { useState } from 'react';
 import { useQAStore } from '../../store/useQAStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCalls, useBulkSample } from '../../hooks/useCalls';
+import { downloadReport } from '../../api/calls';
 import { CallFilters } from './CallFilters';
 import { CallCard } from './CallCard';
 
@@ -10,19 +11,23 @@ export function CallList() {
   const selectedCall    = useQAStore((s) => s.selectedCall);
   const setSelectedCall = useQAStore((s) => s.setSelectedCall);
   const bulkSession     = useQAStore((s) => s.bulkSession);
+  const filters         = useQAStore((s) => s.filters);
+  const schema          = useQAStore((s) => s.schema);
   const user            = useAuthStore((s) => s.user);
   const isSupervisor    = user?.role === 'supervisor';
+  const isClient        = user?.role === 'client';
+  const isInternal      = !isClient;
 
   const [flaggedOpen, setFlaggedOpen] = useState(true);
+  const [goodOpen, setGoodOpen]       = useState(true);
+  const [exporting, setExporting]     = useState(false);
 
   const { data: calls = [], isLoading, error, isFetching } = useCalls();
   const bulkSample = useBulkSample();
 
-  const flaggedCalls  = calls.filter((c) => c.qa_status === 'flagged');
-  const goodCalls     = calls.filter((c) => c.good_to_share);
-  const regularCalls  = calls.filter((c) => c.qa_status !== 'flagged' && !c.good_to_share);
-
-  const [goodOpen, setGoodOpen] = useState(true);
+  const flaggedCalls = calls.filter((c) => c.qa_status === 'flagged');
+  const goodCalls    = calls.filter((c) => c.good_to_share);
+  const regularCalls = calls.filter((c) => c.qa_status !== 'flagged' && !c.good_to_share);
 
   const stats = {
     total:      calls.length,
@@ -30,28 +35,60 @@ export function CallList() {
     flagged:    flaggedCalls.length,
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await downloadReport(schema, filters.dateFrom, filters.dateTo, filters.qaStatus || undefined);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-900 border border-slate-700/60 rounded-xl overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/60 shrink-0">
         <div className="flex items-center gap-2">
-          <PhoneCall size={14} className="text-blue-400" />
-          <span className="text-sm font-semibold text-slate-200">Call Queue</span>
+          {isClient
+            ? <Sparkles size={14} className="text-emerald-400" />
+            : <PhoneCall size={14} className="text-blue-400" />}
+          <span className="text-sm font-semibold text-slate-200">
+            {isClient ? 'Good Calls' : 'Call Queue'}
+          </span>
           {isFetching && !isLoading && (
             <Loader2 size={12} className="text-slate-500 animate-spin" />
           )}
         </div>
-        <button
-          onClick={() => bulkSample.mutate(5)}
-          disabled={bulkSample.isPending}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700/60 transition-all disabled:opacity-50"
-          title="Load 5 random unreviewed calls"
-        >
-          {bulkSample.isPending
-            ? <Loader2 size={12} className="animate-spin" />
-            : <Shuffle size={12} />}
-          Bulk Sample
-        </button>
+
+        <div className="flex items-center gap-1.5">
+          {/* Export - available to all users */}
+          <button
+            onClick={handleExport}
+            disabled={exporting || !schema}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700/60 transition-all disabled:opacity-50"
+            title="Export QA report as CSV"
+          >
+            {exporting
+              ? <Loader2 size={12} className="animate-spin" />
+              : <Download size={12} />}
+            Export
+          </button>
+
+          {/* Bulk Sample - internal only */}
+          {isInternal && (
+            <button
+              onClick={() => bulkSample.mutate(5)}
+              disabled={bulkSample.isPending}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700/60 transition-all disabled:opacity-50"
+                title="Load 5 random unreviewed calls"
+              >
+                {bulkSample.isPending
+                  ? <Loader2 size={12} className="animate-spin" />
+                  : <Shuffle size={12} />}
+                Bulk Sample
+              </button>
+          )}
+        </div>
       </div>
 
       {/* Bulk mode banner */}
@@ -75,13 +112,13 @@ export function CallList() {
         <span className="text-[11px] text-slate-500">
           <span className="text-slate-300 font-medium">{stats.total}</span> calls
         </span>
-        {stats.unreviewed > 0 && (
+        {isInternal && stats.unreviewed > 0 && (
           <span className="text-[11px]">
             <span className="text-amber-400 font-medium">{stats.unreviewed}</span>
             <span className="text-slate-500"> pending</span>
           </span>
         )}
-        {stats.flagged > 0 && (
+        {isInternal && stats.flagged > 0 && (
           <span className="text-[11px]">
             <span className="text-red-400 font-medium">{stats.flagged}</span>
             <span className="text-slate-500"> flagged</span>
@@ -94,7 +131,7 @@ export function CallList() {
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <Loader2 size={24} className="text-blue-500 animate-spin" />
-            <p className="text-xs text-slate-500">Loading calls from S3…</p>
+            <p className="text-xs text-slate-500">Loading calls…</p>
           </div>
         )}
 
@@ -114,7 +151,7 @@ export function CallList() {
           </div>
         )}
 
-        {/* Supervisor: Flagged for Review — pinned at top, strongly highlighted */}
+        {/* Supervisor: Flagged for Review */}
         {!isLoading && isSupervisor && flaggedCalls.length > 0 && (
           <div className="mb-3">
             <button
@@ -144,8 +181,8 @@ export function CallList() {
           </div>
         )}
 
-        {/* Good to Share — visible to all users */}
-        {!isLoading && goodCalls.length > 0 && (
+        {/* Good to Share — visible to internal users (client sees all calls as good) */}
+        {!isLoading && isInternal && goodCalls.length > 0 && (
           <div className="mb-3">
             <button
               onClick={() => setGoodOpen((v) => !v)}
@@ -174,8 +211,19 @@ export function CallList() {
           </div>
         )}
 
-        {/* Regular calls */}
-        {!isLoading && regularCalls.map((call) => (
+        {/* Client: all returned calls are good — render flat */}
+        {!isLoading && isClient && calls.map((call) => (
+          <CallCard
+            key={call.call_id}
+            call={call}
+            isSelected={selectedCall?.call_id === call.call_id}
+            onClick={() => setSelectedCall(call)}
+            variant="good"
+          />
+        ))}
+
+        {/* Internal: regular calls */}
+        {!isLoading && isInternal && regularCalls.map((call) => (
           <CallCard
             key={call.call_id}
             call={call}

@@ -98,10 +98,11 @@ export function LoginPage() {
           {/* Demo credentials hint */}
           <div className="mt-5 pt-4 border-t border-slate-800">
             <p className="text-[11px] text-slate-600 text-center mb-2">Demo accounts</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {[
-                { user: 'analyst', pass: 'analyst123', label: 'QA Analyst' },
-                { user: 'supervisor', pass: 'supervisor123', label: 'Supervisor' },
+                { user: 'analyst',    pass: 'analyst123',    label: 'QA Analyst'  },
+                { user: 'supervisor', pass: 'supervisor123', label: 'Supervisor'   },
+                { user: 'client',     pass: 'client123',     label: 'Client'       },
               ].map(({ user, pass, label }) => (
                 <button
                   key={user}

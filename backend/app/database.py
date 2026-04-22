@@ -104,6 +104,7 @@ async def _seed_users(db):
     seeds = [
         ("analyst",    pwd.hash("analyst123"),   "qa_analyst",  "QA Analyst"),
         ("supervisor", pwd.hash("supervisor123"), "supervisor",  "Supervisor"),
+        ("client",     pwd.hash("client123"),    "client",      "Client"),
     ]
     for username, pw_hash, role, display_name in seeds:
         await db.execute(

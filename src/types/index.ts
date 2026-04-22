@@ -1,5 +1,5 @@
 export type QAStatus = 'unreviewed' | 'reviewed' | 'flagged';
-export type UserRole = 'qa_analyst' | 'supervisor';
+export type UserRole = 'qa_analyst' | 'supervisor' | 'client';
 
 export interface AuthUser {
   username: string;
@@ -93,4 +93,9 @@ export interface Filters {
 export interface SilenceRegion {
   start: number;
   end: number;
+}
+
+export interface Entity {
+  type: string;
+  value: string;
 }

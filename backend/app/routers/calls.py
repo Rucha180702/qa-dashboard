@@ -1,15 +1,19 @@
 import asyncio
+import csv
 import hashlib
+import io
 import json
 import random
 from datetime import date, timedelta, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 import aiosqlite
 
 from app.database import get_db
 from app.config import get_settings
+from app.auth import get_current_user, require_internal
 from app.models.call import CallSummary, BulkSampleResponse
 from app.services.s3_service import (
     list_calls_from_s3, generate_presigned_url, discover_schemas,
@@ -24,6 +28,40 @@ from app.services.transcribe_service import (
 router = APIRouter(prefix="/calls", tags=["calls"])
 
 _BYTES_PER_SEC = 16_000
+
+_ENTITY_POOL = [
+    ("Person Name", ["Rahul Sharma", "Priya Patel", "Amit Kumar", "Sunita Devi", "Mohammed Khan", "Deepa Iyer", "Vikram Singh"]),
+    ("Loan Amount",  ["₹50,000", "₹1,20,000", "₹75,000", "₹2,00,000", "₹35,000", "₹90,000", "₹45,000"]),
+    ("Account No",   ["XXXX-4521", "XXXX-8934", "XXXX-2210", "XXXX-7765", "XXXX-3302", "XXXX-6612"]),
+    ("EMI Date",     ["5th of month", "15th of month", "1st of month", "20th of month", "10th of month"]),
+    ("City",         ["Mumbai", "Delhi", "Bangalore", "Chennai", "Hyderabad", "Pune", "Kolkata"]),
+    ("Loan Type",    ["Personal Loan", "Home Loan", "Business Loan", "Gold Loan", "Two-Wheeler Loan", "Education Loan"]),
+    ("Due Amount",   ["₹8,200", "₹12,500", "₹5,800", "₹18,000", "₹3,400", "₹22,000"]),
+]
+
+
+def _lcg(x: int) -> int:
+    return (x * 6364136223846793005 + 1442695040888963407) & 0xFFFFFFFFFFFFFFFF
+
+
+def _dummy_entities(call_id: str) -> list[dict]:
+    rng = int(hashlib.md5(call_id.encode()).hexdigest(), 16) & 0xFFFFFFFFFFFFFFFF
+    count = 3 + (rng % 3)
+    rng = _lcg(rng)
+    used: set[int] = set()
+    result = []
+    for _ in range(40):
+        if len(result) >= count:
+            break
+        idx = rng % len(_ENTITY_POOL)
+        rng = _lcg(rng)
+        if idx not in used:
+            used.add(idx)
+            label, values = _ENTITY_POOL[idx]
+            val = values[rng % len(values)]
+            rng = _lcg(rng)
+            result.append({"type": label, "value": val})
+    return result
 
 
 def _daterange(date_from: date, date_to: date):
@@ -76,6 +114,7 @@ async def _get_or_cache_calls(
                   m.audio_key, m.file_size,
                   COALESCE(r.qa_status, 'unreviewed') as qa_status,
                   r.overall_score,
+                  r.reviewed_by,
                   COALESCE(r.good_to_share, 0) as good_to_share
            FROM call_metadata_cache m
            LEFT JOIN qa_reviews r ON r.call_id = m.call_id AND r.schema = m.schema
@@ -99,7 +138,7 @@ async def _get_or_cache_calls(
             "qa_status": row["qa_status"],
             "overall_score": row["overall_score"],
             "good_to_share": bool(row["good_to_share"]),
-            # TODO: replace with DB lookup (ClickHouse)
+            "reviewed_by": row["reviewed_by"] or "",
             "language": _dummy_field(uuid, _DUMMY_LANGUAGES, "lang"),
             "use_case": _dummy_field(uuid, _DUMMY_USE_CASES, "uc"),
         })
@@ -116,10 +155,15 @@ async def list_calls(
     use_case: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     good_to_share: Optional[bool] = Query(None),
+    user: dict = Depends(get_current_user),
     db: aiosqlite.Connection = Depends(get_db),
 ):
     if (date_to - date_from).days > 30:
         raise HTTPException(400, "Date range cannot exceed 30 days")
+
+    # Clients may only see good-to-share calls
+    if user.get("role") == "client":
+        good_to_share = True
 
     all_calls: list[dict] = []
     for d in _daterange(date_from, date_to):
@@ -157,6 +201,7 @@ async def bulk_sample(
     n: int = Query(5, ge=1, le=20),
     date_from: date = Query(default_factory=lambda: date.today() - timedelta(days=7)),
     date_to: date = Query(default_factory=date.today),
+    _user: dict = Depends(require_internal),
     db: aiosqlite.Connection = Depends(get_db),
 ):
     all_calls: list[dict] = []
@@ -171,10 +216,56 @@ async def bulk_sample(
     )
 
 
+@router.get("/export")
+async def export_csv(
+    schema: str = Query(...),
+    date_from: date = Query(default_factory=lambda: date.today() - timedelta(days=7)),
+    date_to: date = Query(default_factory=date.today),
+    qa_status: Optional[str] = Query(None),
+    good_to_share: Optional[bool] = Query(None),
+    _user: dict = Depends(require_internal),
+    db: aiosqlite.Connection = Depends(get_db),
+):
+    if (date_to - date_from).days > 30:
+        raise HTTPException(400, "Date range cannot exceed 30 days")
+
+    all_calls: list[dict] = []
+    for d in _daterange(date_from, date_to):
+        all_calls.extend(await _get_or_cache_calls(db, schema, d))
+
+    if qa_status:
+        all_calls = [c for c in all_calls if c["qa_status"] == qa_status]
+    if good_to_share is not None:
+        all_calls = [c for c in all_calls if c["good_to_share"] == good_to_share]
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Call ID", "Date", "Phone", "Duration (s)", "Language", "Use Case",
+        "QA Status", "Overall Score", "Good to Share", "Reviewed By",
+    ])
+    for c in all_calls:
+        writer.writerow([
+            c["call_id"], c["call_date"], c["customer_phone"],
+            c["duration_seconds"], c["language"], c["use_case"],
+            c["qa_status"], c["overall_score"] or "",
+            "Yes" if c["good_to_share"] else "No",
+            c.get("reviewed_by", ""),
+        ])
+
+    filename = f"qa_report_{schema}_{date_from}_{date_to}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/{call_id}/audio")
 async def get_audio_url(
     call_id: str,
     schema: str = Query(...),
+    _user: dict = Depends(get_current_user),
     db: aiosqlite.Connection = Depends(get_db),
 ):
     async with db.execute(
@@ -192,13 +283,23 @@ async def get_audio_url(
     return {"url": url, "expires_in": get_settings().presigned_url_expiry}
 
 
+@router.get("/{call_id}/entities")
+async def get_entities(
+    call_id: str,
+    schema: str = Query(...),
+    _user: dict = Depends(get_current_user),
+):
+    """Return extracted entities for a call. Currently returns deterministic dummy data."""
+    return _dummy_entities(call_id)
+
+
 @router.post("/{call_id}/transcribe")
 async def transcribe_call(
     call_id: str,
     schema: str = Query(...),
+    _user: dict = Depends(require_internal),
     db: aiosqlite.Connection = Depends(get_db),
 ):
-    """Submit an AWS Transcribe job for this call. Idempotent."""
     async with db.execute(
         "SELECT audio_key FROM call_metadata_cache WHERE call_id = ? AND schema = ?",
         (call_id, schema),
@@ -208,7 +309,6 @@ async def transcribe_call(
     if not row or not row["audio_key"]:
         raise HTTPException(404, "Call not found in cache — load the call list first")
 
-    # Don't resubmit if already pending / completed
     async with db.execute(
         "SELECT status FROM transcriptions WHERE call_id = ? AND schema = ?",
         (call_id, schema),
@@ -240,6 +340,7 @@ async def transcribe_call(
 async def get_transcript(
     call_id: str,
     schema: str = Query(...),
+    _user: dict = Depends(get_current_user),
     db: aiosqlite.Connection = Depends(get_db),
 ):
     async with db.execute(
@@ -280,7 +381,6 @@ async def get_transcript(
             "message": row["error_message"] or "Transcription failed",
         }
 
-    # pending / in_progress — check AWS for latest status
     job_name = row["job_name"]
     try:
         job_info = await asyncio.get_event_loop().run_in_executor(
@@ -336,7 +436,6 @@ async def get_transcript(
             "message": reason,
         }
 
-    # Still queued / in_progress
     new_status = "in_progress" if aws_status == "in_progress" else "pending"
     if new_status != status:
         await db.execute(

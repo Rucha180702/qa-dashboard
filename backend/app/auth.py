@@ -54,3 +54,10 @@ async def require_supervisor(user: dict = Depends(get_current_user)) -> dict:
     if user.get("role") != "supervisor":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor role required")
     return user
+
+
+async def require_internal(user: dict = Depends(get_current_user)) -> dict:
+    """Blocks client role — only qa_analyst and supervisor may proceed."""
+    if user.get("role") == "client":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not available for client accounts")
+    return user

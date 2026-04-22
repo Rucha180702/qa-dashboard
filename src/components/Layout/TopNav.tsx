@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Shield, ChevronDown, Building2, Loader2, LogOut, Crown } from 'lucide-react';
+import { Shield, ChevronDown, Building2, Loader2, LogOut, Crown, UserCircle } from 'lucide-react';
 import { useQAStore } from '../../store/useQAStore';
 import { useSchemas } from '../../hooks/useCalls';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -11,6 +11,7 @@ export function TopNav() {
   const user   = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const isSupervisor = user?.role === 'supervisor';
+  const isClient     = user?.role === 'client';
 
   // Auto-select first schema on initial load
   useEffect(() => {
@@ -70,9 +71,12 @@ export function TopNav() {
             'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-medium',
             isSupervisor
               ? 'bg-amber-900/20 border-amber-700/40 text-amber-300'
-              : 'bg-slate-800 border-slate-700/60 text-slate-400',
+              : isClient
+                ? 'bg-teal-900/20 border-teal-700/40 text-teal-300'
+                : 'bg-slate-800 border-slate-700/60 text-slate-400',
           ].join(' ')}>
             {isSupervisor && <Crown size={11} />}
+            {isClient && <UserCircle size={11} />}
             {user?.display_name ?? 'User'}
           </div>
           <button

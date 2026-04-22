@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 import aiosqlite
 
 from app.database import get_db
+from app.auth import get_current_user, require_internal
 from app.models.review import (
     ReviewUpsert, ReviewOut, CommentCreate, CommentOut,
     DEFAULT_RUBRIC
@@ -37,6 +38,7 @@ async def _get_comments(db: aiosqlite.Connection, call_id: str, schema: str) -> 
 async def get_review(
     call_id: str,
     schema: str = Query(...),
+    _user: dict = Depends(require_internal),
     db: aiosqlite.Connection = Depends(get_db),
 ):
     row = await _get_review_row(db, call_id, schema)
@@ -61,6 +63,7 @@ async def upsert_review(
     call_id: str,
     payload: ReviewUpsert,
     schema: str = Query(...),
+    _user: dict = Depends(require_internal),
     db: aiosqlite.Connection = Depends(get_db),
 ):
     rubric_json = json.dumps([r.model_dump() for r in payload.rubric])
@@ -92,6 +95,7 @@ async def flag_call(
     call_id: str,
     schema: str = Query(...),
     flagged_by: str = Query("QA Analyst"),
+    _user: dict = Depends(require_internal),
     db: aiosqlite.Connection = Depends(get_db),
 ):
     now = datetime.utcnow().isoformat()
@@ -112,6 +116,7 @@ async def flag_call(
 async def unflag_call(
     call_id: str,
     schema: str = Query(...),
+    _user: dict = Depends(require_internal),
     db: aiosqlite.Connection = Depends(get_db),
 ):
     await db.execute(
@@ -128,6 +133,7 @@ async def toggle_good_to_share(
     call_id: str,
     schema: str = Query(...),
     value: bool = Query(...),
+    _user: dict = Depends(require_internal),
     db: aiosqlite.Connection = Depends(get_db),
 ):
     now = datetime.utcnow().isoformat()
@@ -148,6 +154,7 @@ async def add_comment(
     call_id: str,
     payload: CommentCreate,
     schema: str = Query(...),
+    _user: dict = Depends(require_internal),
     db: aiosqlite.Connection = Depends(get_db),
 ):
     async with db.execute(
@@ -171,6 +178,7 @@ async def delete_comment(
     call_id: str,
     comment_id: int,
     schema: str = Query(...),
+    _user: dict = Depends(require_internal),
     db: aiosqlite.Connection = Depends(get_db),
 ):
     async with db.execute(

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchCalls, fetchSchemas, fetchAudioUrl, fetchTranscript, fetchBulkSample, startTranscription } from '../api/calls';
+import { fetchCalls, fetchSchemas, fetchAudioUrl, fetchTranscript, fetchBulkSample, startTranscription, fetchEntities } from '../api/calls';
 import { useQAStore } from '../store/useQAStore';
-import type { TranscriptResponse } from '../types';
+import type { Entity, TranscriptResponse } from '../types';
 
 export function useSchemas() {
   return useQuery({ queryKey: ['schemas'], queryFn: fetchSchemas, staleTime: Infinity });
@@ -49,6 +49,15 @@ export function useStartTranscription() {
     onSuccess: (_data, { callId, schema }) => {
       queryClient.invalidateQueries({ queryKey: ['transcript', callId, schema] });
     },
+  });
+}
+
+export function useEntities(callId: string | undefined, schema: string | undefined) {
+  return useQuery<Entity[]>({
+    queryKey: ['entities', callId, schema],
+    queryFn: () => fetchEntities(callId!, schema!),
+    enabled: !!callId && !!schema,
+    staleTime: Infinity,
   });
 }
 

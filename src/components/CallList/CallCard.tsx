@@ -33,11 +33,11 @@ export function CallCard({ call, isSelected, onClick, variant }: Props) {
 
   const baseClass = (() => {
     if (isSelected) {
-      if (variant === 'flagged') return 'bg-red-900/20 border-red-500/60 ring-1 ring-red-500/30';
+      if (variant === 'flagged') return 'bg-red-900/40 border-red-500 ring-2 ring-red-500/40 shadow-lg shadow-red-900/30';
       if (variant === 'good')    return 'bg-emerald-900/20 border-emerald-500/60 ring-1 ring-emerald-500/30';
       return 'bg-blue-600/10 border-blue-500/40 ring-1 ring-blue-500/30';
     }
-    if (variant === 'flagged') return 'bg-red-950/40 border-red-800/50 hover:bg-red-950/60 hover:border-red-700/60';
+    if (variant === 'flagged') return 'bg-red-950/60 border-red-700 hover:bg-red-900/40 hover:border-red-600 shadow-sm shadow-red-900/20';
     if (variant === 'good')    return 'bg-emerald-950/30 border-emerald-800/40 hover:bg-emerald-950/50 hover:border-emerald-700/50';
     return 'bg-slate-800/50 border-slate-700/40 hover:bg-slate-800 hover:border-slate-600/60';
   })();
@@ -51,8 +51,8 @@ export function CallCard({ call, isSelected, onClick, variant }: Props) {
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1">
           {variant === 'flagged' && (
-            <span className="flex items-center gap-1 text-[10px] font-semibold text-red-400">
-              <Flag size={10} className="fill-red-400" /> FLAGGED
+            <span className="flex items-center gap-1 text-[11px] font-bold text-red-300 bg-red-900/50 px-2 py-0.5 rounded-md border border-red-700/60">
+              <Flag size={11} className="fill-red-300" /> FLAGGED
             </span>
           )}
           {variant === 'good' && (

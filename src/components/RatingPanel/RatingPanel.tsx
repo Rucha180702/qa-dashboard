@@ -2,11 +2,22 @@ import { useState, useRef, KeyboardEvent } from 'react';
 import {
   Star, Flag, FlagOff, Loader2, Send, Trash2,
   CheckCircle, ClipboardCheck, MessageSquarePlus,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Sparkles,
 } from 'lucide-react';
 import { useQAStore } from '../../store/useQAStore';
-import { useReview, useUpsertReview, useFlagCall, useAddComment, useDeleteComment } from '../../hooks/useReview';
+import { useReview, useUpsertReview, useFlagCall, useAddComment, useDeleteComment, useToggleGoodToShare } from '../../hooks/useReview';
+import { useEntities } from '../../hooks/useCalls';
 import type { RubricDimension } from '../../types';
+
+const ENTITY_COLORS: Record<string, string> = {
+  'Person Name': 'bg-purple-900/40 text-purple-300 border-purple-700/40',
+  'Loan Amount':  'bg-emerald-900/40 text-emerald-300 border-emerald-700/40',
+  'Account No':   'bg-blue-900/40 text-blue-300 border-blue-700/40',
+  'EMI Date':     'bg-amber-900/40 text-amber-300 border-amber-700/40',
+  'City':         'bg-cyan-900/40 text-cyan-300 border-cyan-700/40',
+  'Loan Type':    'bg-indigo-900/40 text-indigo-300 border-indigo-700/40',
+  'Due Amount':   'bg-red-900/40 text-red-300 border-red-700/40',
+};
 
 const DEFAULT_RUBRIC: RubricDimension[] = [
   { id: 'accuracy',   label: 'Accuracy',   score: 0 },
@@ -110,13 +121,20 @@ export function RatingPanel() {
     );
   }
 
-  const upsert      = useUpsertReview(callId, schema);
-  const flagMutation = useFlagCall(callId, schema);
-  const addComment  = useAddComment(callId, schema);
-  const deleteComment = useDeleteComment(callId, schema);
+  const { data: entities = [] } = useEntities(
+    selectedCall ? callId : undefined,
+    selectedCall ? schema : undefined,
+  );
 
-  const isFlagged = review?.qa_status === 'flagged';
-  const isReviewed = review?.qa_status === 'reviewed';
+  const upsert          = useUpsertReview(callId, schema);
+  const flagMutation    = useFlagCall(callId, schema);
+  const goodToShare     = useToggleGoodToShare(callId, schema);
+  const addComment      = useAddComment(callId, schema);
+  const deleteComment   = useDeleteComment(callId, schema);
+
+  const isFlagged   = review?.qa_status === 'flagged';
+  const isReviewed  = review?.qa_status === 'reviewed';
+  const isGoodCall  = review?.good_to_share ?? false;
 
   const updateRubric = (id: string, score: number) => {
     setRubric((r) => r.map((d) => d.id === id ? { ...d, score } : d));
@@ -124,7 +142,16 @@ export function RatingPanel() {
 
   const handleSubmit = () => {
     if (overallScore === 0) return;
-    upsert.mutate({ overall_score: overallScore, rubric });
+    upsert.mutate(
+      { overall_score: overallScore, rubric },
+      {
+        onSuccess: () => {
+          // Reset ratings after successful save
+          setOverallScore(0);
+          setRubric(DEFAULT_RUBRIC.map(d => ({ ...d, score: 0 })));
+        },
+      }
+    );
   };
 
   const handleAddComment = () => {
@@ -187,6 +214,29 @@ export function RatingPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        {/* Extracted Entities */}
+        {entities.length > 0 && (
+          <div className="px-4 pt-3 pb-2 border-b border-slate-800">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-600 mb-2">
+              Extracted Entities
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {entities.map((e, i) => {
+                const color = ENTITY_COLORS[e.type] ?? 'bg-slate-700/40 text-slate-300 border-slate-600/40';
+                return (
+                  <span
+                    key={i}
+                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] border ${color}`}
+                  >
+                    <span className="font-semibold opacity-70 mr-1">{e.type}:</span>
+                    <span className="font-medium">{e.value}</span>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Overall Score */}
         <div className="px-4 pt-4 pb-2">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">
@@ -211,7 +261,7 @@ export function RatingPanel() {
         </div>
 
         {/* Submit */}
-        <div className="px-4 pb-3">
+        <div className="px-4 pb-3 space-y-2">
           <button
             onClick={handleSubmit}
             disabled={overallScore === 0 || upsert.isPending}
@@ -221,6 +271,21 @@ export function RatingPanel() {
               ? <Loader2 size={14} className="animate-spin" />
               : <CheckCircle size={14} />}
             {upsert.isPending ? 'Saving…' : 'Save Review'}
+          </button>
+          <button
+            onClick={() => goodToShare.mutate(!isGoodCall)}
+            disabled={goodToShare.isPending}
+            className={[
+              'w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium border transition-all',
+              isGoodCall
+                ? 'bg-emerald-900/40 border-emerald-600/60 text-emerald-300 hover:bg-emerald-900/60'
+                : 'bg-slate-800/60 border-slate-600/40 text-slate-400 hover:text-emerald-300 hover:border-emerald-700/50',
+            ].join(' ')}
+          >
+            {goodToShare.isPending
+              ? <Loader2 size={14} className="animate-spin" />
+              : <Sparkles size={14} />}
+            {isGoodCall ? 'Good to Share ✓' : 'Mark as Good to Share'}
           </button>
         </div>
 
