@@ -1,24 +1,6 @@
-import { X, Search, SlidersHorizontal } from 'lucide-react';
+import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { useQAStore } from '../../store/useQAStore';
-import { AGENTS } from '../../data/mockCalls';
-import { Language, UseCase, QAStatus } from '../../types';
-
-const USE_CASES: { value: UseCase; label: string }[] = [
-  { value: 'loan_inquiry', label: 'Loan Inquiry' },
-  { value: 'collection',   label: 'Collection'   },
-  { value: 'support',      label: 'Support'       },
-  { value: 'onboarding',   label: 'Onboarding'    },
-  { value: 'complaint',    label: 'Complaint'     },
-];
-
-const LANGUAGES: { value: Language; label: string }[] = [
-  { value: 'en', label: 'English'   },
-  { value: 'hi', label: 'Hindi'     },
-  { value: 'ta', label: 'Tamil'     },
-  { value: 'mr', label: 'Marathi'   },
-  { value: 'bn', label: 'Bengali'   },
-  { value: 'te', label: 'Telugu'    },
-];
+import type { QAStatus } from '../../types';
 
 const QA_STATUSES: { value: QAStatus; label: string }[] = [
   { value: 'unreviewed', label: 'Unreviewed' },
@@ -27,70 +9,67 @@ const QA_STATUSES: { value: QAStatus; label: string }[] = [
 ];
 
 export function CallFilters() {
-  const { filters, setFilter, resetFilters } = useQAStore();
+  const filters  = useQAStore((s) => s.filters);
+  const setFilter = useQAStore((s) => s.setFilter);
+  const reset     = useQAStore((s) => s.resetFilters);
 
-  const hasActiveFilters = Object.values(filters).some((v) => v !== '');
+  const hasActive = filters.qaStatus !== '' || filters.agentId !== '' || filters.search !== '';
 
   return (
-    <div className="p-4 space-y-3 border-b border-slate-700/60">
-      {/* Header */}
+    <div className="p-3 space-y-2.5 border-b border-slate-700/60">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
-          <SlidersHorizontal size={15} className="text-blue-400" />
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
+          <SlidersHorizontal size={13} className="text-blue-400" />
           Filters
         </div>
-        {hasActiveFilters && (
-          <button
-            onClick={resetFilters}
-            className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
-          >
-            <X size={12} />
-            Clear all
+        {hasActive && (
+          <button onClick={reset} className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-300 transition-colors">
+            <X size={11} /> Clear
           </button>
         )}
       </div>
 
       {/* Search */}
       <div className="relative">
-        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
         <input
           type="text"
-          placeholder="Search agent, customer, ID…"
+          placeholder="Phone, UUID, agent ID…"
           value={filters.search}
           onChange={(e) => setFilter('search', e.target.value)}
-          className="input pl-8 text-xs"
+          className="w-full bg-slate-800 border border-slate-600/50 rounded-lg pl-7 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
         />
       </div>
 
       {/* Date range */}
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="label">From</label>
+          <label className="block text-[11px] text-slate-500 mb-1">From</label>
           <input
             type="date"
             value={filters.dateFrom}
             onChange={(e) => setFilter('dateFrom', e.target.value)}
-            className="input text-xs"
+            className="w-full bg-slate-800 border border-slate-600/50 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all"
           />
         </div>
         <div>
-          <label className="label">To</label>
+          <label className="block text-[11px] text-slate-500 mb-1">To</label>
           <input
             type="date"
             value={filters.dateTo}
             onChange={(e) => setFilter('dateTo', e.target.value)}
-            className="input text-xs"
+            className="w-full bg-slate-800 border border-slate-600/50 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all"
           />
         </div>
       </div>
 
       {/* QA Status */}
       <div>
-        <label className="label">QA Status</label>
+        <label className="block text-[11px] text-slate-500 mb-1">QA Status</label>
         <select
           value={filters.qaStatus}
           onChange={(e) => setFilter('qaStatus', e.target.value as QAStatus | '')}
-          className="select text-xs"
+          className="w-full bg-slate-800 border border-slate-600/50 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all appearance-none cursor-pointer"
         >
           <option value="">All statuses</option>
           {QA_STATUSES.map((s) => (
@@ -99,49 +78,16 @@ export function CallFilters() {
         </select>
       </div>
 
-      {/* Use Case */}
+      {/* Agent ID */}
       <div>
-        <label className="label">Use Case</label>
-        <select
-          value={filters.useCase}
-          onChange={(e) => setFilter('useCase', e.target.value as UseCase | '')}
-          className="select text-xs"
-        >
-          <option value="">All use cases</option>
-          {USE_CASES.map((u) => (
-            <option key={u.value} value={u.value}>{u.label}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Language */}
-      <div>
-        <label className="label">Language</label>
-        <select
-          value={filters.language}
-          onChange={(e) => setFilter('language', e.target.value as Language | '')}
-          className="select text-xs"
-        >
-          <option value="">All languages</option>
-          {LANGUAGES.map((l) => (
-            <option key={l.value} value={l.value}>{l.label}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Agent */}
-      <div>
-        <label className="label">Agent</label>
-        <select
+        <label className="block text-[11px] text-slate-500 mb-1">Agent ID</label>
+        <input
+          type="text"
+          placeholder="e.g. 6407"
           value={filters.agentId}
           onChange={(e) => setFilter('agentId', e.target.value)}
-          className="select text-xs"
-        >
-          <option value="">All agents</option>
-          {AGENTS.map((a) => (
-            <option key={a.id} value={a.id}>{a.name}</option>
-          ))}
-        </select>
+          className="w-full bg-slate-800 border border-slate-600/50 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all"
+        />
       </div>
     </div>
   );

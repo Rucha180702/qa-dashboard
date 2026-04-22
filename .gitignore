@@ -6,12 +6,16 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
+backend/.env
 node_modules
 dist
 dist-ssr
 *.local
 
+backend/venv/
+
+.env
+backend/.env
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -22,3 +26,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+__pycache__/
+*.pyc
